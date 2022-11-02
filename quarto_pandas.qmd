@@ -1,0 +1,138 @@
+---
+title: "quarto_pandas"
+format:
+    html:
+        theme: litera
+        toc: true
+---
+
+# Using Pandas style with Quarto
+
+In this example I'll try to use the builtin [Styler object's methos of pandas](https://pandas.pydata.org/docs/reference/style.html) for formatting pandas dataframe in Quarto. There will be some snags.
+
+## Generate a pandas dataframe
+
+I'll generate a table of data, which will include some string, numeric and math expression:
+
+```{python}
+import pandas as pd
+import numpy as np
+
+V_R = 50
+sl = pd.Series(['SLR', 'SLC', 'SLV', 'SLD', 'SLO', 'SLID'], name='SL')
+pvr = pd.Series([0.02, 0.05, 0.1, 0.63, 0.81, 0.995], name='P_V_R')
+
+df = pd.DataFrame([sl, pvr]).transpose()
+df['T_R'] = df['P_V_R'].map(lambda x: - V_R/np.log(1-x))
+df['lambda_i'] = 1/df['T_R']
+```
+
+The above code results in the following textual data:
+
+```{python}
+print(df)
+```
+
+which get rendered as html table in quarto:
+
+```{python}
+#| label: tbl-simple-df
+#| tbl-cap: "df rendered without any custom formatting"
+df
+```
+
+## Desired Output
+
+The desired output I want to achieve is the one rapresented in @tbl-desired-output, which is a manually consrtructed markdown table
+
+|   SL | $P_{V_R}$ |         $T_R$ | $\lambda_i$ |
+|:---:|:---:|:---:|:---:|
+|  SLR |  0.02 | 2474.915823 | 0.000404 |
+|  SLC |  0.05 |  974.786287 | 0.001026 |
+|  SLV |   0.1 |  474.561079 | 0.002107 |
+|  SLD |  0.63 |   50.289048 | 0.019885 |
+|  SLO |  0.81 |   30.107220 | 0.033215 |
+| SLID | 0.995 |    9.436958 | 0.105966 |
+: Desired output {#tbl-desired-output}
+
+## Format the dataframe using pandas' styler
+
+I want to apply some different style to each columns which rapresenta different type of data:
+
+(@) I want that the columns `P_V_R` to be formatted as `%` with 1 decimal place of precision
+
+```{python}
+#| label: tbl-formatted
+#| tbl-cap: "dataframe after formatting one columns"
+dfs = df.style.format({'P_V_R': '{:.1%}'}) # dfs is a styler object
+dfs
+```
+
+The columns get correctly formatted, but **the whole table has lost the formatting**, it doesn't looks good. 
+
+Thanks to this [workaround on the github](https://github.com/quarto-dev/quarto-cli/issues/2513#issuecomment-1252684317) I can get a nice looking table:
+
+```{python}
+#| label: tbl-class-dataframe
+#| tbl-cap: "class=dataframe"
+dfs.set_table_attributes('class=dataframe')
+```
+
+(@) Now I want to center align the content of the cell; according to pandas documentation I have to use `set_table_styles`
+
+```{python}
+#| label: tbl-class-dataframe-align
+#| tbl-cap: "center align failed"
+dfs.set_table_styles(
+    [{
+        'selector': 'tr',
+        'props': [('text-align', 'center')]
+    }]
+)
+```
+
+As you can see, the content doesn't get centered, but I discovered that if change the `class` to `table` instead of `dataframe`, it works again:
+
+
+```{python}
+#| label: tbl-class-table
+#| tbl-cap: "class=table"
+# I can't use the same styler object (dfs) as before otherwise
+# it will affect the precedent output
+
+dfs2 = (df.style
+            .set_table_attributes('class=table')
+            # I reapply the precedent format 
+            .format({'P_V_R': '{:.1%}'})
+            .set_table_styles(
+                [{
+                    'selector': 'tr',
+                    'props': [('text-align', 'center')]
+                }]
+            )
+)
+dfs2
+```
+Notice that *the rows are not longer alternating colors*, but that is compatible with the output of a Markdown Table such as @tbl-desired-output
+
+```{python}
+#| label: tbl-class-table-formatting
+#| tbl-cap: "fully formatting tabled using the styler"
+
+# format the data
+dfs2.format(formatter={
+    'P_V_R': '{:.1%}',
+    'T_R': '{:.0f}',
+    'lambda_i': '{:0.3%}'
+    })
+#format the index
+dfs2.format_index(
+    formatter='${}$',
+    axis=1
+    )
+dfs2.hide()
+
+```
+
+df.index
+
